@@ -88,15 +88,39 @@
 <div id="searchres" v-if="tabledata !== {}" class="container">
 	<table class="table">
 		<tr>
-			<th v-for="head in tabledata.head">{{head}}</th>
+			<th v-for="head in tabledata.head" v-if="head!='id'">{{head}}</th>
 		</tr>
 		<tr v-for="item in tabledata.result">
-			<td v-for="(value,key) in item">
-				<a href="#" @click="idsubmit(value)" v-if="key=='id'">{{value}}</a>
-				<template v-if="key!='id'">{{value}}</template></td>
+			<td v-for="(value,key) in item" v-if="key!='id'">
+				<a href="#" @click="idsubmit(tabledata.type,item.id)" v-if="key=='ptitle' || key=='name'" data-toggle="modal" data-target="#paperModal">{{value}}</a>
+				<template v-if="key != 'ptitle' && key!='name'">{{value}}</template></td>
 		</tr>
 	</table>
 </div>
+
+<div class="modal fade" id="paperModal" tabindex="-1" role="dialog" >
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+        <h4 class="modal-title">{{modaldata.title == undefined ? modaldata.name : modaldata.title}}</h4>
+      </div>
+      <div class="modal-body">
+        <table class="table">
+			<tr v-for = "(item,key) in modaldata">
+				<th>{{key}}</th>
+				<td v-if="typeof(item)!=='object' || item===null|| item['title'] === undefined">{{item}}</td>
+				<td v-else><a href="#" @click="idsubmit('论文',item.id)">{{item.title}}</a></td>
+			</tr>
+		</table>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" data-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 	</div>
 	<script src="/jquery.min.js"></script>
 	<script type="text/javascript" src="/bootstrap.js"></script>
@@ -121,6 +145,7 @@
 			message2:'',
 			message3:'',
 			tabledata:{},
+			modaldata:{},
 		},
 		methods:{
 
@@ -128,32 +153,15 @@
 				$('.jumbotron').attr('style','padding-top:0px;height:200px;');
 				var query;
 				console.log(this.typepoint);
-				/*if(this.typepoint === 0){
-					query = '/searchroot?type=' + this.typepoint + '&name=' + this.message1 + '&rectype=' + this.entitiespoint;
-				}
-				else{
-					query = '/searchroot?type=' + this.typepoint + '&name1=' + this.message2 + '&name2=' + this.message3 ;
-					if(this.typepoint === 2){
-						query +=  '&rectype=' + this.recommendpoint;
-					}
-				}
-				
-				console.log(query);/*
-				app.$http.get(query)
-					.then((response) =>{
-						console.log(response);
-						foofoo=response;
-					});
-*/
 				socket.emit('searchroot',{
 					type:this.typepoint,
 					name:this.message1,
 					rectype:this.entitiespoint
 				});
 			},
-			idsubmit:function(myid){
+			idsubmit:function(mytype,myid){
 				socket.emit('idroot',{
-					type:this.tabledata.type,
+					type:mytype,
 					id:myid
 				});
 			}
@@ -165,8 +173,7 @@ socket.on('searchroot',(data)=>{
 	app.tabledata = data;
 });
 socket.on('idroot',(data)=>{
-	console.log('idroot::');
-	console.log(data);
+	app.modaldata = data.result;
 })
 $("body").on('keyup',function(event){
         if(event.keyCode === 13){
