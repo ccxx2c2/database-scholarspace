@@ -28,6 +28,15 @@
         .modal-dialog{
         	width:1200px;
         }
+        .center{
+        	display: block;
+			margin-left: auto;
+			margin-right: auto;
+        }
+        iframe{
+        	width:900px;
+        	height:420px;
+        }
 	</style>
 </head>
 <body>
@@ -65,7 +74,7 @@
 		    <div class="input-group">
 		      <input type="text" class="form-control" id="input1" v-bind:placeholder="entities[entitiespoint] + '名称'" style="width:500px" v-if="typepoint===0" v-model="message1">
 		      <input type="text" class="form-control" id="input2" :placeholder="typepoint === 1?'学者名称1':'个人用户名'" style="width:250px"  v-if="typepoint !== 0" v-model="message2">
-		      <input type="text" class="form-control" id="input3" :placeholder="typepoint === 1?'学者名称2':'待发表关键词（空格分隔）'" style="width:250px"  v-if="typepoint !== 0" v-model="message3">
+		      <input type="text" class="form-control" id="input3" :placeholder="typepoint === 1?'学者名称2':'待发表关键词'" style="width:250px"  v-if="typepoint !== 0" v-model="message3">
 		    </div>
 		   <div class="btn-group" role="group" v-if="typepoint===0">
 			    <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
@@ -106,6 +115,10 @@
 		</tr>
 	</table>
 </div>
+<div class="container" :style="typepoint==1?'':'display:none;'">
+		<div id="viz0" class="vizs center" ></div>
+</div>
+
 
 <div class="modal fade" id="paperModal" tabindex="-1" role="dialog" >
   <div class="modal-dialog" role="document">
@@ -138,8 +151,16 @@
     </div>
   </div>
 </div>
-
+<div class="container">
+<div class="alert alert-info alert-dismissible" role="alert" v-if="unclick">
+  <button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+  你是否要找：<template v-for="item in frequency">
+  		<br/><a href="#" class="alert-link" @click="clickfrequency(item.name)">{{item.name}}</a>
+	</template>
+</div>
+</div>
 	</div>
+	<iframe  id="myiframe" class="center" src="./popularity.html" style="display:none;"></iframe>
 	<script src="/jquery.min.js"></script>
 	<script type="text/javascript" src="/bootstrap.js"></script>
     <script src="/socket.io/socket.io.js"></script>
@@ -157,7 +178,7 @@
 			typepoint:0,
 			types:['信息查询','学者间关系','寻求推荐'],
 			entitiespoint:0,
-			entities:['学者','论文','机构'],
+			entities:['学者','论文','机构','关键词'],
 			recommendpoint:0,
 			options:['学者','论文关键词','机构'],
 			message1:'',
@@ -166,18 +187,81 @@
 			tabledata:{},
 			modaldata:{},
 			type:'',
+			unclick:true,
+			frequency:[{
+						id:231369,
+						name:'Ronald L. Rivest'
+					},{
+						id:804905,
+						name:'David E. Goldberg'
+					},{
+						id:1104146,
+						name:'David E. Culler'
+					},{
+						id:591690,
+						name:'Donald E. Knuth'
+					},{
+						id:502770,
+						name:'John Hopcroft'}],
 		},
 		methods:{
-
+			clickfrequency:function(name){
+				$('.jumbotron').attr('style','padding-top:0px;height:200px;');
+				this.unclick=false;
+				this.typepoint = 0;
+				this.message1 = name;
+				this.searchsubmit();
+			},
 			searchsubmit:function(){
 				$('.jumbotron').attr('style','padding-top:0px;height:200px;');
+				$("#myiframe").attr("style","display:none;");
+				this.unclick=false;
 				var query;
 				console.log(this.typepoint);
-				socket.emit('searchroot',{
-					type:this.typepoint,
-					name:this.message1,
-					rectype:this.entitiespoint
-				});
+				if(this.typepoint == 0){
+								socket.emit('searchroot',{
+									type:this.typepoint,
+									name:this.message1,
+									rectype:this.entitiespoint
+								});}
+				if(this.typepoint == 1){
+
+			        var config = {
+			            container_id: "viz0",
+			            server_url: "bolt://192.168.43.196:7687",
+			            server_user: "neo4j",
+			            server_password: "123456",
+			            labels: {
+			                "scholar": {
+			                    "caption": "sname",
+			                    "size": "sweight",
+			                    "community": "fid"
+			                }
+			            },
+			            relationships: {
+			                "cooperate": {
+			                    "thickness": "weight",
+			                    "caption": false
+			                }
+			            },
+			            initial_cypher: `match (start:scholar{sname:'${this.message2}'}),(end:scholar{sname:'${this.message3}'}),
+										p=shortestpath((start)-[:cooperate*..10]-(end))
+										return p
+										`
+			        };
+			        viz = new NeoVis.default(config);
+			        viz.render();
+			        console.log(viz);
+			        this.tabledata = {};
+				}
+				if(this.typepoint == 2){
+								socket.emit('searchroot',{
+									type:this.typepoint,
+									name:this.message2,
+									num:this.message3
+								});
+
+				}
 			},
 			idsubmit:function(mytype,myid){
 				socket.emit('idroot',{
@@ -190,7 +274,12 @@
 		}
 	});
 socket.on('searchroot',(data)=>{
-	app.tabledata = data;
+	console.log('get');
+	if(app.typepoint==0&&app.entitiespoint==3){
+		document.getElementById('myiframe').contentWindow.location.reload(true);
+		$("#myiframe").attr("style","");
+	}
+	else{app.tabledata = data;}
 });
 socket.on('idroot',(data)=>{
 	app.modaldata = data.result;
