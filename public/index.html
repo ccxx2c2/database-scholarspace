@@ -19,6 +19,15 @@
 		.form-inline .input-group> .form-control{
 			width:auto;
 		}
+		.vizs {
+            width: 550px;
+            height: 400px;
+            border: 1px solid lightgray;
+            font: 22pt arial;
+        }
+        .modal-dialog{
+        	width:1200px;
+        }
 	</style>
 </head>
 <body>
@@ -106,6 +115,9 @@
         <h4 class="modal-title">{{modaldata.title == undefined ? modaldata.name : modaldata.title}}</h4>
       </div>
       <div class="modal-body">
+
+<div class="row">
+	<div :class="type=='学者'?'col-md-6':'col-md-12'">
         <table class="table">
 			<tr v-for = "(item,key) in modaldata">
 				<th>{{key}}</th>
@@ -113,6 +125,12 @@
 				<td v-else><a href="#" @click="idsubmit('论文',item.id)">{{item.title}}</a></td>
 			</tr>
 		</table>
+	</div>
+	<div :class="type=='学者'?'col-md-6':'col-md-1'" :style="type=='学者'?'':'display:none;'">
+		<div id="viz1" class="vizs"></div>
+		<div id="viz2" class="vizs"></div>
+	</div>
+</div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-primary" data-dismiss="modal">Close</button>
@@ -128,6 +146,7 @@
 	<script src="vue.js"></script>
 	<script src="/vue-resource.js"></script>
 <script src="/vue-router.js"></script>
+<script src="/neovis.js"></script>
 <script>
 	var app;
 	var socket = io();
@@ -146,6 +165,7 @@
 			message3:'',
 			tabledata:{},
 			modaldata:{},
+			type:'',
 		},
 		methods:{
 
@@ -174,6 +194,54 @@ socket.on('searchroot',(data)=>{
 });
 socket.on('idroot',(data)=>{
 	app.modaldata = data.result;
+	app.type=data.type;
+	if(data.type =="学者"){
+        var config = {
+            container_id: "viz1",
+            server_url: "bolt://192.168.43.196:7687",
+            server_user: "neo4j",
+            server_password: "123456",
+            labels: {
+                "scholar": {
+                    "caption": "sname",
+                    "size": "sweight",
+                    "community": "fid"
+                }
+            },
+            relationships: {
+                "cooperate": {
+                    "thickness": "weight",
+                    "caption": false
+                }
+            },
+            initial_cypher: `match (s1:scholar{sid:'${app.modaldata.id}'})-[r1:cooperate]-(s2:scholar)-[r2:cooperate]-(s3:scholar) return s1,s2,s3,r1,r2`
+        };
+        viz = new NeoVis.default(config);
+        viz.render();
+        console.log(viz);
+        config.initial_cypher=`match(s1:scholar{sid:'${app.modaldata.id}'})-[r1:work_in]-(p:school)-[r2:work_in]-(s2:scholar) return s1,r1,p,r2,s2`;
+        config.labels={
+                "scholar": {
+                    "caption": "sname",
+                    "size": "sweight",
+                    "community": "fid"
+                },
+                "school": {
+                    "caption": "scname",
+                }
+        };
+        config.relationships={
+                "work_in": {
+                    "thickness": "weight",
+                    "caption": false
+                }
+
+        }
+        config.container_id= "viz2",
+        viz = new NeoVis.default(config);
+        viz.render();
+        console.log(viz);
+	}
 })
 $("body").on('keyup',function(event){
         if(event.keyCode === 13){
