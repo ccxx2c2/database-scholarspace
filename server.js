@@ -56,12 +56,29 @@ io.on('connection',(socket)=>{
                     WHERE sname LIKE '%${data.name}%'
                     ORDER BY ABS(LEN('${data.name}')-LEN(sname));
                   `);
-                  console.log(result)
+                  result = result.recordset;
+                  for(var i = 0;i<result.length;i++){
+                        await (async(i)=>{
+                          return new Promise((resolve,reject) => {
+                              db.cypher({
+                                    query:`match (s:scholar) where s.sid='${result[i].id}' return s.sinterest,s.sweight,s.sid`,
+                              },function(err,result2){
+                                if (err)throw err;
+                                  result2 = result2[0];
+                                  result[i]['sinterest'] = result2['s.sinterest'];
+                                  result[i]['sweight'] = result2['s.sweight'];
+                                  resolve();
+                              });
+                          });     
+                        })(i);
 
+                    }
+                  
+                  console.log(result);
                   socket.emit('searchroot',{
                       type:'学者',
-                      head:['id','name','organization','number of papers','citation'],
-                      result:result.recordset,
+                      head:['id','name','organization','number of papers','citation','sinterest','sweight'],
+                      result:result,
                   });
                 })();
 
@@ -73,7 +90,7 @@ io.on('connection',(socket)=>{
                 var result;
                 (async ()=>{
                   result = await sql.query(`
-                    SELECT TOP 10 pid as id, ptitle, pauthor,pabstract
+                    SELECT TOP 10 pid as id, ptitle, pauthor,pcite,pyear,pjournal,pabstract
                     FROM papers
                     WHERE ptitle LIKE '%${data.name}%'
                     OR pabstract LIKE '%${data.name}%'
@@ -82,7 +99,7 @@ io.on('connection',(socket)=>{
                   
                   socket.emit('searchroot',{
                       type:'论文',
-                      head:['id','title','author','abstract'],
+                      head:['id','title','author','cite','publish year','journal','abstract'],
                       result:result.recordset,
                   });
                 })();
@@ -99,12 +116,97 @@ io.on('connection',(socket)=>{
             }
             break;
         }
-        //res.json({a:122222});
     });
     socket.on('idroot',(data)=>{
       console.log('in idroot');
       console.log(data);
-      socket.emit('idroot',data);
+      switch(data.type){
+        case '学者':
+          mylog('for 学者')
+          var ret,result,result2;
+            (async ()=>{
+              result = await sql.query(`
+                SELECT sid as id, sname as name, spnum as number_of_papers, sinstitution as organization, spcite as number_of_citation
+                FROM scholars
+                WHERE sid = ${data.id};
+              `);
+              result = result.recordset[0];
+              result2 = await sql.query(`
+                SELECT ptitle as title, sposition as position, p.pid as id
+                FROM [paper-author] ps, papers p
+                WHERE ps.pid = p.pid
+                AND ps.sid =${data.id};
+              `);
+
+                    await (async(i)=>{
+                      return new Promise((resolve,reject) => {
+                          db.cypher({
+                                query:`match (s:scholar) where s.sid='${data.id}' return s.sinterest,s.sweight,s.sid`,
+                          },function(err,result2){
+                            if (err)throw err;
+                              result2 = result2[0];
+                              result2['s.sinterest'].split(";").forEach((item,index)=>{
+                                result['sinterest' + (index+1)] = item;
+                              });
+                              result['sweight'] = result2['s.sweight'];
+                              resolve();
+                          });
+                      });     
+                    })(i);
+              for(var i = 1;i<=result2.recordset.length;i++){
+                result['paper' + i]={
+                  title:result2.recordset[i - 1]['title'],
+                  id:result2.recordset[i - 1]['id'],
+                };
+                result['paper' + i + 'position'] = result2.recordset[i - 1]['position'];
+              }
+
+              
+              console.log(result);
+              socket.emit('idroot',{
+                  type:'学者',
+                  result:result,
+              });
+            })();
+        break;
+
+        case '论文':
+            mylog(' for 论文');
+            var result,result2,result3,ret;
+                (async ()=>{
+                  result = await sql.query(`
+                    SELECT pid as id, ptitle as title, pauthor as author,pcite as citation,pyear as publish_year,pjournal as journal,pabstract as abstract
+                    FROM papers
+                    WHERE pid =  ${data.id};
+                  `);
+                  console.log(result)
+                  result2 = await sql.query(`
+                    SELECT keyword 
+                    FROM [paper-keyword]
+                    WHERE pid =  ${data.id};
+                  `);
+                  console.log(result2)
+                  result3 = await sql.query(`
+                    SELECT ptitle as title,p.pid as id
+                    FROM [paper-document] pd, papers p
+                    WHERE pd.pid = ${data.id}
+                    AND pd.documentid = p.pid;
+                  `);
+                  console.log(result3)
+                  ret = result.recordset[0];
+                  for(var i = 1;i<=result2.recordset.length;i++){
+                    ret['keyword' + i]=result2.recordset[i - 1]['keyword'];
+                  }
+                  for(var i = 1;i<=result3.recordset.length;i++){
+                    ret['citation' + i]=result3.recordset[i - 1];
+                  }
+                  socket.emit('idroot',{
+                      type:'论文',
+                      result:ret,
+                  });
+                })();
+        break;
+      }
     }
       )
 });
